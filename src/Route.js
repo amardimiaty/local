@@ -1,11 +1,12 @@
 import { AsyncStorage } from "react-native"
+import { Point as p, Region } from "react-native-maps";
 
 export default class Route {
 
 
     point = { x: 0, y: 0 }
 
-    constructor(id) {
+    constructor(id = null) {
         this.id = id
     }
 
@@ -25,5 +26,14 @@ export class Location {
     longitude = 0
     longitudeDelta = 0
     latitudeDelta = 0
-    longitudeDelta = 0
+
+    constructor(longitude, latitude) {
+        this.longitude = longitude || 0;
+        this.latitude = latitude || 0;
+    }
+}
+
+export class Point {
+    x = 0
+    y = 0
 }
