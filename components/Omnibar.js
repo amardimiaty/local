@@ -33,8 +33,7 @@ export default class Omnibar extends Component {
     }
 
     onInputChange(text) {
-        return;
-        if (this.props.cars && text.trim()) {
+        if (this.props.cars.length > 0 && text.trim()) {
             this.setState({ inputText: text });
             regx = new RegExp("\.*" + text + "\i");
             search = new Promise((res, rej) => {
@@ -55,6 +54,8 @@ export default class Omnibar extends Component {
                     });
                 }
             });
+        }else{
+            Alert.alert("No car available!")
         }
     }
 

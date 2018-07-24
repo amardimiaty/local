@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import { StyleSheet, Text, View, Geolocation, StatusBar, Alert } from 'react-native';
-import { Circle, Marker } from 'react-native-maps';
+import { Circle, Marker, UrlTile, LocalTile } from 'react-native-maps';
 import { Root, Toast, ActionSheet } from 'native-base';
 import Expo, { MapView } from 'expo';
 import Omnibar from './components/Omnibar';
@@ -18,7 +18,7 @@ export default class Home extends Component {
         this.local = new Local()
         this.initialRegion = {
             latitude: 6.455027,
-            longitude: 3.384082, latitudeDelta: 0, longitudeDelta: 0
+            longitude: 3.284082, latitudeDelta: 0, longitudeDelta: 0
         };
         this.state = { region: this.initialRegion, record: false, followUser: false, userLocation: new Location(), vehicles: [] }
         this.barRef = null
@@ -51,8 +51,9 @@ export default class Home extends Component {
     render() {
         return (
             <Root style={styles.container}>
-                <MapView showsCompass={true} loadingEnabled={true} onMapReady={() => { Toast.show({ text: "Map ready!", position: "bottom", type: "success" }) }} followsUserLocation={this.state.followUser} provider="google" showsUserLocation={true} onUserLocationChange={this.onUserLocationChange.bind(this)} region={this.state.region} onRegionChange={this.onRegionChange.bind(this)} style={styles.map} initialRegion={this.initialRegion} >
-                    <Circle radius={25} center={{ latitude: this.state.userLocation.latitude, longitude: this.state.userLocation.longitude }} />
+                <MapView showsCompass={true} loadingEnabled={true} onMapReady={() => { Toast.show({ text: "Map ready!", position: "bottom", type: "success" }) }} followsUserLocation={this.state.followUser} provider={null} showsUserLocation={true} onUserLocationChange={this.onUserLocationChange.bind(this)} region={this.state.region} onRegionChange={this.onRegionChange.bind(this)} style={styles.map} initialRegion={this.initialRegion} mapType={"none"} >
+                    <LocalTile pathTemplate={"./assets/tiles/{z}/{x}/{y}.png"} zIndex={12} />
+                    <Circle zIndex={18} radius={25} center={{ latitude: this.state.userLocation.latitude, longitude: this.state.userLocation.longitude }} />
                     {this.state.vehicles ? this.state.vehicles.map((vehicle) => {
                         <Marker title={vehicle.title} coordinate={{ longitude: vehicle.location.longitude, latitude: vehicle.location.latitude }} description={vehicle.brand + " " + vehicle.model + " (" + vehicle.type + "), " + vehicle.year} />
                     }) : null}
