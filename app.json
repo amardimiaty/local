@@ -1,5 +1,9 @@
 {
   "expo": {
     "sdkVersion": "27.0.0"
+  },
+  "local":{
+    "WEBAPP_URL":"http://192.168.56.1:8000/local.php",
+    "WEBSOCK_URL": "ws:192.168.56.1:8080"
   }
 }
