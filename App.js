@@ -20,3 +20,5 @@ export default class App extends React.Component {
         );
     }
 }
+
+export const version = '1.0.0.43';

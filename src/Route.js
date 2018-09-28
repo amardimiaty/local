@@ -1,4 +1,4 @@
-import { AsyncStorage,Dimensions } from "react-native"
+import { AsyncStorage, Dimensions } from "react-native"
 import { Point as p, Region } from "react-native-maps";
 
 export default class Route {
@@ -24,10 +24,8 @@ export default class Route {
 export class Location {
     latitude = 0;
     longitude = 0;
-    get longitudeDelta (){
-        let {width,height} = Dimensions.get('window');
-        return this.latitudeDelta * (width/height);
-    };
+    longitudeDelta = 11.5;
+
     latitudeDelta = 0.0922;
 
     timestamp = Date.now();
@@ -35,6 +33,13 @@ export class Location {
     constructor(longitude, latitude) {
         this.longitude = longitude || 0;
         this.latitude = latitude || 0;
+        let { width, height } = Dimensions.get('window');
+        this.longitudeDelta = this.latitudeDelta * (width / height);
+    }
+
+    update(longitude, latitude) {
+        this.longitude = longitude;
+        this.latitude = latitude;
     }
 }
 
