@@ -12,7 +12,7 @@ export default class Omnibar extends Component {
         super(props);
         this.state = {
             inputText: "", showModal: false, modal: { car: null, color: null, type: null, year: null },
-            searchArray: null, showResults: false, loadingResults: false
+            searchArray: [], showResults: false, loadingResults: false
         }
         this.buttonColor = '#555';
         this.stat={searchArray:null};//Testing autofill
@@ -128,15 +128,17 @@ export default class Omnibar extends Component {
                 </View>
                 {this.state.showResults ?
                     <View style={{ backgroundColor: '#fff', borderRadius: 10, marginTop: 2, paddingTop: 15, paddingBottom: 15 }} justifyContent='center'>
-                        <FlatList keyExtractor={(item, index) => item.vid} data={this.stat.searchArray} renderItem={item => {
-                            <SearchItem item={item} onPress={item => this._onPressItem} />
-                        }}
+                        <FlatList keyExtractor={(item, index) => item.vid} data={this.state.searchArray} renderItem={item => <SearchItem item={item} onPress={item => this._onPressItem} >dd</SearchItem>}
                             ListEmptyComponent={
                                 <View flex={1} alignContent={'stretch'} alignItems={'stretch'} flex={1} flexDirection={'row'} justifyContent={'center'} >
                                     <Icon style={{ color: '#f88b', fontSize: 20 }} name={'alert'} />
                                     <Text style={{ textAlign: 'center', color: '#888b' }}> no car matches your search</Text>
                                 </View>
                             } refreshing={this.state.loadingResults} />
+                            {/* {this.state.searchArray.map(item=>{
+                                console.log(item);
+                                return <Text item={item} onPress={item => this._onPressItem} >dd</Text>
+                            })} */}
                     </View>
                     : null
                 }

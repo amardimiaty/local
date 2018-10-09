@@ -1,5 +1,4 @@
 import { AsyncStorage, Dimensions } from "react-native"
-import { Point as p, Region } from "react-native-maps";
 
 export default class Route {
 

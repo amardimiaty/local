@@ -5,7 +5,6 @@ import { Root, Toast } from 'native-base';
 import Expo, { MapView, AppLoading } from 'expo';
 import Omnibar from './components/Omnibar';
 import Local from './src/Local'
-import Route, { Location } from './src/Route';
 import Home from './home';
 import Splash from './SplashScreen';
 

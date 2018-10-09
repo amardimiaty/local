@@ -1,11 +1,18 @@
 import { AsyncStorage, ToastAndroid, Platform } from 'react-native';
 import { Toast } from 'native-base';
-import fBase from 'firebase';
+import * as fBase from 'firebase';
 
 import { Location } from "./Route";
 
 export const DEBUG = true;
 
+const FIREBASE = fBase.initializeApp({
+    apiKey: "AIzaSyDz3BuwyGYx8XtH5L4BVC4jFgId1Rn11yQ",
+    authDomain: "local-00000.firebaseapp.com",
+    databaseURL: "https://local-00000.firebaseio.com",
+    storageBucket: "local-00000.appspot.com",
+    messagingSenderId: "1042041164043"
+});
 /**
  * 
  *  Values stored in the database include: web,user.
@@ -23,9 +30,13 @@ export default class Local {
     REGEX = new RegExp(/^(http|https):\/\/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|[A-Za-z0-9^\\s]{2,}):[0-9]{1,}.*/i);
     REGEX2 = new RegExp(/^(ws|wss|http|https):\/\/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|[A-Za-z0-9^\\s]{2,}):[0-9]{1,}.*/i);
     get isSetup() {
-        let setup = this.webAppUrl !== undefined && this.REGEX.test(this.webAppUrl);
+        let setup = !this.isLagacy || (this.webAppUrl !== undefined && this.REGEX.test(this.webAppUrl));
         console.log("is setup: ", this.webAppUrl !== undefined, this.REGEX.test(this.webAppUrl), this.webAppUrl);
         return setup;
+    }
+
+    get isLagacy() {
+        return this.config.USE_LEGACY;
     }
 
     set useWebSock(use) {
@@ -43,6 +54,7 @@ export default class Local {
         this.config = config;
         this.setWebAppUrl(config.WEBAPP_URL || this.WEBAPP_URL);
         this.setWebSockUrl(config.WEBSOCK_URL || this.WEBSOCK_URL);
+        this.fBase = FIREBASE;
     }
 
     setWebAppUrl(url) {
@@ -89,7 +101,7 @@ export default class Local {
         try {
             let response = await this.fetch(url, data, method, timeout, authenticated);
             console.log(response);
-            if(!response){
+            if (!response) {
                 throw new Error('Network request failed');
             }
 
@@ -145,51 +157,100 @@ export default class Local {
 
     }
 
+    parseFirebaseUser(res) {
+        let user = new User(res.email.split('@')[0]);
+        user.id = res.uid;
+        return user;
+    }
+
     getUser(id) {
         fetch()
     }
 
     addUser(user, callback) {
-        return this.buildRequest("post", "/user/add", JSON.stringify(user), (data, err) => {
-            if (err) {
-                throw err;
-            }
-            if (data) {
-                let user = new User(data.username);
-                user.profile = data.profile;
-                user.token = this.AUTH_TOKEN;
-                if (!DEBUG) {
-                    this.getWebSocketUrl();
+        if (!this.isLagacy) {
+            return new Promise((res, rej) => {
+                if (user.password !== user.v_password) {
+                    rej(new Error("Passwords do not match!"));
                 }
-                callback(user);
-            }
-        });
+                // this.fBase.auth().onAuthStateChanged(authUser => {
+                //     if (this.isLagacy) {
+                //         return;
+                //     }
+                //     console.log("authenticated user is", authUser);
+                // });
+                return this.fBase.auth().createUserWithEmailAndPassword(user.username + "@local-00000.firebaseapp.com", user.password)
+                    .then(auth => {
+                        if (auth.user) {
+                            if (!DEBUG && this.isLagacy) {
+                                this.getWebSocketUrl();
+                            }
+                            return callback(this.parseFirebaseUser(auth.user));
+                        }
+                        return callback(null, new Error("Server not responding"));
+                    }).catch(rej);
+            });
+        } else {
+            return this.buildRequest("post", "/user/add", JSON.stringify(user), (data, err) => {
+                if (err) {
+                    throw err;
+                }
+                if (data) {
+                    let user = new User(data.username);
+                    user.profile = data.profile;
+                    user.token = this.AUTH_TOKEN;
+                    if (!DEBUG && this.isLagacy) {
+                        this.getWebSocketUrl();
+                    }
+                    callback(user);
+                }
+            });
+        }
     }
 
     loginUser(user, callback) {
-        return this.buildRequest('post', '/user/login', JSON.stringify(user), (res, err) => {
-            if (err) {
-                // throw err;
-                console.log(err)
-                return callback(null, err);
-            }
-            if (res) {
-                let user = new User(res.username);
-                user.profile = res.profile;
-                user.token = this.AUTH_TOKEN;
-                if (!DEBUG) {
-                    this.getWebSocketUrl();
+        if (!this.isLagacy) {
+            return new Promise((res, rej) => {
+                return this.fBase.auth().signInWithEmailAndPassword(user.username + "@local-00000.firebaseapp.com", user.password)
+                    .then((auth) => {
+                        if (auth.user) {
+                            if (!DEBUG && this.isLagacy) {
+                                this.getWebSocketUrl();
+                            }
+                            return callback(this.parseFirebaseUser(auth.user));
+                        }
+                        return callback(null, new Error("Server not responding"));
+                    }).catch(rej);
+            });
+        } else {
+            return this.buildRequest('post', '/user/login', JSON.stringify(user), (res, err) => {
+                if (err) {
+                    // throw err;
+                    console.log(err)
+                    return callback(null, err);
                 }
-                return callback(user);
-            }
-            return callback(null, new Error("Server not responding"));
-        }).then(null, error => callback(null, error));
+                if (res) {
+                    let user = new User(res.username);
+                    user.profile = res.profile;
+                    user.token = this.AUTH_TOKEN;
+                    if (!DEBUG && this.isLagacy) {
+                        this.getWebSocketUrl();
+                    }
+                    return callback(user);
+                }
+                return callback(null, new Error("Server not responding"));
+            }).then(null, error => callback(null, error));
+        }
     }
 
     loginWithToken(token, callback) {
-        this.buildRequest('post', '/user/login_token', JSON.stringify(token), (res, err) => {
-            return callback(this.AUTH_TOKEN, err);
-        });
+        if (this.isLagacy) {
+            return this.buildRequest('post', '/user/login_token', JSON.stringify(token), (res, err) => {
+                return callback(this.AUTH_TOKEN, err);
+            });
+        } else {
+            callback();
+        }
     }
 
     getVehicles(callback) {
@@ -272,10 +333,19 @@ export default class Local {
     }
 
     logout(callback) {
-        this.buildRequest('get', '/user/logout', null, res => {
-            this.AUTH_TOKEN = null;
-            return callback();
-        });
+        if (this.isLagacy) {
+            return this.buildRequest('get', '/user/logout', null, res => {
+                this.AUTH_TOKEN = null;
+                return callback();
+            });
+        } else {
+            return this.fBase.auth().signOut().then(callback);
+        }
+    }
+
+    reset() {
+        this.AUTH_TOKEN = null
+        return new User
     }
 
     getWebSocketUrl(cb) {
@@ -345,7 +415,6 @@ export function debounce(func, duration = 250, immediate = false) {
         timeout = setTimeout(later, duration);
         if (callnow) func.apply(context, args);
     }
-
 }
 
 export class Vehicle {
@@ -377,7 +446,7 @@ export class User {
 
     constructor(username) {
         if (username && typeof username === 'object') {
-            this.username = username.name;
+            this.username = username.username;
             this.location = username.location;
             this.id = username.id;
             this.vehicles = username.vehicles;
@@ -395,6 +464,7 @@ export class User {
         this.useFingerprint = user.useFingerprint;
         this.vehicles = null;
         this.token = user.token;
+        this.id = user.id;
     }
 
     save(token) {

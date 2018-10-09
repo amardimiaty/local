@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import { View, Text, Icon, Button, Input, Toast, Root, Item, CheckBox, Switch, Label } from 'native-base';
-import { Slider, StatusBar, AsyncStorage, Alert, ToastAndroid, Modal, ScrollView, StyleSheet, BackPressEventName, ActivityIndicator, Vibration, BackHandler, Platform } from 'react-native';
+import { Slider,KeyboardAvoidingView, StatusBar, AsyncStorage, Alert, ToastAndroid, Modal, ScrollView, StyleSheet, BackPressEventName, ActivityIndicator, Vibration, BackHandler, Platform } from 'react-native';
 import Expo, { Fingerprint } from 'expo';
 import Local, { User, debounce } from './src/Local';
 import { version } from './App';
@@ -13,6 +13,7 @@ export default class Splash extends Component {
         settingsLoaded: false,
         useWebsockets: true,
         webappUrl: '', websockUrl: '',
+        useLegacy: true,
         showOptions: false, powerSaver: 0,
         showLogin: false, showRegister: false,
         username: null, loginPass: null, regPass: null, regPassVerify: null,
@@ -46,7 +47,7 @@ export default class Splash extends Component {
             if (res) {
                 let webConfig = JSON.parse(res);
                 this.local = new Local(webConfig);
-                this.setState({ webappUrl: webConfig.WEBAPP_URL, websockUrl: webConfig.WEBSOCK_URL, useWebsockets: webConfig.USE_WEBSOCK, powerSaver: webConfig.POWERSAVER });
+                this.setState({ webappUrl: webConfig.WEBAPP_URL, websockUrl: webConfig.WEBSOCK_URL, useWebsockets: webConfig.USE_WEBSOCK, powerSaver: webConfig.POWERSAVER, useLegacy: webConfig.USE_LEGACY });
             } else {
                 this.local = new Local({});
             }
@@ -58,26 +59,57 @@ export default class Splash extends Component {
             }
             this.user = new User(JSON.parse(res));
             this.setState({ username: this.user.username });
+            if (!this.local.isLagacy) {
+                //unset token
+                this.user.token = null;
+                this.local.AUTH_TOKEN = null;
 
-            if (this.local.isSetup && this.user.token) {
-                this.local.loginWithToken({ token: this.user.token }, (newToken, err) => {
-                    this.setState({ settingsLoaded: false });
-                    if (err) {
-                        Vibration.vibrate(1000);
-                        Platform.OS === "android" ? ToastAndroid.showWithGravity(err.message || "Your session has expired!", ToastAndroid.LONG, ToastAndroid.BOTTOM) : Toast.show({ text: "Your session has expired!", type: 'danger', position: 'bottom' });
-                        this.user.token = null;
-                        this.local.AUTH_TOKEN = null;
-                        this.setState({ settingsLoaded: true });
-                        return;
+
+                unSub = this.local.fBase.auth().onAuthStateChanged(user => {
+                    if (user) {
+                        let username = this.local.parseFirebaseUser(this.local.fBase.auth().currentUser).username;
+                        this.setState({ username });
+                        console.log(user)
+                        // this.setState({ showLogin: false, settingsLoaded: false, loggedIn: true });
+                        // this.startApp({
+                        //     user: this.user,
+                        //     local: this.local
+                        // });
+                    } else {
+                        console.log("no firebase user");
                     }
-                    this.user.token = newToken;
-                    this.setState({ showLogin: false, settingsLoaded: false, loggedIn: true });
-                    this.startApp({
-                        user: this.user,
-                        local: this.local
-                    });
-                })
+                    unSub();
+                    this.setState({ settingsLoaded: true });
+                });
+                // setTimeout(() => {
+                //     this.local.fBase.auth().currentUser === null ? this.setState({ settingsLoaded: true }) : null;
+                // }, 6000)
+
             } else {
+                
+                if (this.local.isSetup && this.user.token) {
+                    this.local.loginWithToken({ token: this.user.token }, (newToken, err) => {
+                        this.setState({ settingsLoaded: false });
+                        if (err) {
+                            Vibration.vibrate(1000);
+                            Platform.OS === "android" ? ToastAndroid.showWithGravity(err.message || "Your session has expired!", ToastAndroid.LONG, ToastAndroid.BOTTOM) : Toast.show({ text: "Your session has expired!", type: 'danger', position: 'bottom' });
+                            this.user.token = null;
+                            this.local.AUTH_TOKEN = null;
+                            this.setState({ settingsLoaded: true });
+                            return;
+                        }
+                        this.user.token = newToken;
+                        this.setState({ showLogin: false, settingsLoaded: false, loggedIn: true });
+                        this.startApp({
+                            user: this.user,
+                            local: this.local
+                        });
+                    })
+                } else {
+                        this.setState({ settingsLoaded: true });
+                }                
+                
+                console.log(this.state.username, this.user)
                 this.setState({ settingsLoaded: true });
             }
         }).catch(err => { console.log(err) });
@@ -92,10 +124,14 @@ export default class Splash extends Component {
 
         BackHandler.addEventListener(BackPressEventName, () => {
             console.log("back button pressed");
-            if (this.state.showLogin) {
+            if(this.state.getFingerPrint){
+                Fingerprint.cancelAuthenticate();
+                this.setState({getFingerPrint: false});
+                return true;
+            }else if (this.state.showLogin) {
                 this.resetModal()
                 return true;
-            }
+            } 
         });
     }
 
@@ -109,7 +145,7 @@ export default class Splash extends Component {
 
     startApp(params) {
         this.user.save();
-        this.local
+        // this.local
         setTimeout(() => {
             this.props.navigation.replace("Home", params);
         }, 100);
@@ -180,6 +216,7 @@ export default class Splash extends Component {
                 }
                 this.user.login(user);
                 this.setState({ showIndicator: false, showLogin: false, settingsLoaded: false, loggedIn: true });
+                console.log(this.user);
                 this.startApp({ user: user, local: this.local });
             }).catch(error => {
                 Vibration.vibrate(1000);
@@ -204,17 +241,32 @@ export default class Splash extends Component {
                 if (err) {
                     Vibration.vibrate(1000);
                     Alert.alert('Login Failed!', err.message);
-                    this.user.token = null;
+                    if (this.user) {
+                        this.user.token = null;
+                    }
                     this.local.AUTH_TOKEN = null;
-                    this.setState({ useFingerprint: false })
+                    //To signout firease login
+                    if (!this.local.isLagacy) {
+                        //     this.local.fBase.auth().signOut().then(() => { this.local.fBase.auth().currentUser = null });
+                    } else {
+                        this.setState({ useFingerprint: false })
+                    }
                     return;
                 }
-                this.user.token = newToken;
-                this.setState({ showLogin: false, settingsLoaded: false, loggedIn: true });
-                this.startApp({
-                    user: this.user,
-                    local: this.local
-                });
+                if (this.local.isLagacy) {
+                    this.user.token = newToken;
+                    this.setState({ showLogin: false, settingsLoaded: false, loggedIn: true });
+                    this.startApp({
+                        user: this.user,
+                        local: this.local
+                    });
+                } else {
+                    this.setState({ showLogin: false, settingsLoaded: false, loggedIn: true });
+                    this.startApp({
+                        user: this.local.parseFirebaseUser(this.local.fBase.auth().currentUser),
+                        local: this.local
+                    });
+                }
             })
         } else {
             Alert.alert('Authentication Failed!', resp.message || "Could not identify user.");
@@ -226,7 +278,33 @@ export default class Splash extends Component {
     }
 
     getFingerPrint() {
-        return Platform.OS === "android" ? <Text style={{ color: '#252', fontSize: 12, marginBottom: 5 }}>Place your finger over the touch sensor.</Text> : <Text style={{ color: '#252', fontSize: 12, marginBottom: 5 }}>scanning...</Text>;
+        return Platform.OS === "android" ? <Text style={{ color: '#268', fontSize: 12, marginBottom: 5 }}>Place your finger over the touch sensor.</Text> : <Text style={{ color: '#252', fontSize: 12, marginBottom: 5 }}>scanning...</Text>;
+    }
+
+    getLegacyAuth() {
+        return (
+            <View flex={1}>
+                <Item style={{ borderBottomWidth: 0 }} >
+                    <Icon name={'globe'} />
+                    <Input padding={8} maxHeight={40} label='Server Url' underlineColorAndroid={'transparent'} style={[styles.input, { fontSize: 14, padding: 10, textAlign: 'center' }]} onChangeText={this.saveOptionsWebUrl.bind(this)} placeholder={"enter web server address"} value={this.state.webappUrl} />
+                </Item>
+                {this.state.useWebsockets ?
+                    <Item style={{ borderBottomWidth: 0 }} >
+                        <Icon name={'sync'} />
+                        <Input padding={8} maxHeight={40} label='Server Url' underlineColorAndroid={'transparent'} style={[styles.input, { fontSize: 14, padding: 10, textAlign: 'center' }]} onChangeText={this.saveOptionsWebSock.bind(this)} placeholder={"enter socket server address"} value={this.state.websockUrl} />
+                    </Item>
+                    : null}
+                {this.state.useWebsockets ?
+                    <Button transparent bordered info block rounded style={{ margin: 6, borderColor: '#000', justifyContent: 'center', alignContent: 'stretch' }} onPress={() => { this.setState({ showIndicator: true }); this.local.getWebSocketUrl((url, err) => { if (url) { console.log(url); this.saveOptionsWebSock(url); } this.setState({ showIndicator: false }); }) }} >
+                        <Text style={{ color: '#111', fontSize: 13 }} >Fetch WebSocket Url</Text>
+                    </Button>
+                    : null}
+                <Item underline={false} style={{ borderBottomWidth: 0, margin: 6, justifyContent: 'center', alignContent: 'stretch' }}  >
+                    <Label>Use WebSockets?</Label>
+                    <Switch value={this.state.useWebsockets} onValueChange={(t) => { this.setState({ useWebsockets: t }); if (t === this.local.useWebSock) { return; } this.local.useWebSock = t; console.log(t, this.local); this._saveOptions(); }} />
+                </Item>
+            </View>
+        )
     }
 
 
@@ -288,7 +366,7 @@ export default class Splash extends Component {
                                 </View>
                                 :
                                 <View alignItems={"stretch"} alignContent={'center'} style={{ padding: 25, margin: 30, borderRadius: 15 }} backgroundColor={"#ddd"} justifyContent={"center"} >
-                                    {this.user && this.user.token && this.state.useFingerprint ?
+                                    {this.user && (!this.local.isLagacy ? this.local.fBase.auth().currentUser : this.user.token) && this.state.useFingerprint ?
                                         <View flexDirection={'column'} justifyContent={'center'} alignContent={'center'} alignItems={'center'} >
                                             <Item style={{ borderBottomWidth: 0 }} >
                                                 <Icon onPress={() => { { this.setState({ getFingerPrint: true }); } this.fingerPrint(); }} style={{ padding: 10, paddingBottom: 5, fontSize: 60 }} name={'finger-print'} />
@@ -296,7 +374,7 @@ export default class Splash extends Component {
                                             <Item style={{ borderBottomWidth: 0 }} >
                                                 {this.state.getFingerPrint ?
                                                     this.getFingerPrint() :
-                                                    <Text style={{ fontSize: 12, marginBottom: 5 }}>Click to {Platform.select({ android: "Use Fingerprint", ios: "Use TouchID or Fingerprint" })}</Text>
+                                                    <Text style={{ fontSize: 12, marginBottom: 5 }}>Click to {Platform.select({ android: "Login as " + this.state.username + " using Fingerprint!", ios: "Use TouchID or Fingerprint to login as " + this.state.username })}</Text>
                                                 }
                                             </Item>
                                         </View>
@@ -329,37 +407,26 @@ export default class Splash extends Component {
                     {/* : null} */}
                     <Modal visible={this.state.showOptions} onRequestClose={() => { }} transparent={true} animationType={'fade'} >
                         <View flex={1} justifyContent={'center'} backgroundColor={'#4447'} >
-                            <View alignItems={"stretch"} alignContent={'space-between'} style={{ padding: 25, margin: 25, borderRadius: 15 }} backgroundColor={"#ddd"} justifyContent={"flex-start"} >
+                            <View alignItems={"stretch"} alignContent={'space-between'} style={{ padding: 25, margin: 12, borderRadius: 15 }} backgroundColor={"#ddd"} justifyContent={"flex-start"} >
                                 <Text style={styles.headerText} >Settings</Text>
                                 <ScrollView>
-                                    <Item style={{ borderBottomWidth: 0 }} >
-                                        <Icon name={'globe'} />
-                                        <Input padding={8} maxHeight={40} label='Server Url' underlineColorAndroid={'transparent'} style={[styles.input, { fontSize: 14, padding: 10, textAlign: 'center' }]} onChangeText={this.saveOptionsWebUrl.bind(this)} placeholder={"enter web server address"} value={this.state.webappUrl} />
-                                    </Item>
-                                    {this.state.useWebsockets ?
-                                        <Item style={{ borderBottomWidth: 0 }} >
-                                            <Icon name={'sync'} />
-                                            <Input padding={8} maxHeight={40} label='Server Url' underlineColorAndroid={'transparent'} style={[styles.input, { fontSize: 14, padding: 10, textAlign: 'center' }]} onChangeText={this.saveOptionsWebSock.bind(this)} placeholder={"enter socket server address"} value={this.state.websockUrl} />
-                                        </Item>
-                                        : null}
-                                    {this.state.useWebsockets ?
-                                        <Button transparent bordered info block rounded style={{ margin: 6, borderColor: '#000', justifyContent: 'center', alignContent: 'stretch' }} onPress={() => { this.setState({ showIndicator: true }); this.local.getWebSocketUrl((url, err) => { if (url) { console.log(url); this.saveOptionsWebSock(url); } this.setState({ showIndicator: false }); }) }} >
-                                            <Text style={{ color: '#111', fontSize: 13 }} >Fetch WebSocket Url</Text>
-                                        </Button>
-                                        : null}
                                     <Item underline={false} style={{ borderBottomWidth: 0, margin: 6, justifyContent: 'center', alignContent: 'stretch' }}  >
-                                        <Label>Use WebSockets?</Label>
-                                        <Switch value={this.state.useWebsockets} onValueChange={(t) => { this.setState({ useWebsockets: t }); if (t === this.local.useWebSock) { return; } this.local.useWebSock = t; console.log(t, this.local); this._saveOptions(); }} />
+                                        <Label>Use Legacy?</Label>
+                                        <Switch value={this.state.useLegacy} onValueChange={(t) => { this.setState({ useLegacy: t }); if (t === this.local.useLegacy) { return; } this.local.config.USE_LEGACY = t; console.log('use legacy', t, this.local); this._saveOptions(); }} />
                                     </Item>
+                                    {this.state.useLegacy ? this.getLegacyAuth() : null}
                                     {this.state.hasFingerprint ?
                                         <Item underline={false} style={{ borderBottomWidth: 0, margin: 6, justifyContent: 'center', alignContent: 'stretch' }}  >
                                             <Label ><Icon name={'finger-print'} style={{ fontSize: 20 }} /> &nbsp;&nbsp;Use Fingerprint?</Label>
                                             <Switch value={this.state.useFingerprint} onValueChange={(t) => { this.setState({ useFingerprint: t }); }} />
                                         </Item>
                                         : null}
-                                    <Item stackedLabel underline={false} style={{ margin: 7, justifyContent: 'center', alignContent: 'stretch' }}  >
-                                        <Label ><Icon name={'battery-full'} style={{ fontSize: 15 }} /> &nbsp;PowerSaver: {Local.PowerSaver[this.state.powerSaver]}</Label>
-                                        <Slider style={{ margin: 6, marginTop: 19 }} alignSelf={'stretch'} maximumValue={2} minimumValue={0} step={1} value={0} onValueChange={v => { this.setState({ powerSaver: v }); this.local.powerSaver = v; console.log("Powersaver: " + Local.PowerSaver[v], v); this._saveOptions(); }} />
+                                    <Item stackedLabel underline={false} style={{ borderBottomWidth: 0, margin: 7, justifyContent: 'center', alignContent: 'stretch' }}  >
+                                        <Label >
+                                            <Icon name={'battery-full'} style={{ fontSize: 15 }} /> &nbsp;PowerSaver: &nbsp;
+                                        <Text style={{ fontWeight: "bold",color: this.state.powerSaver === 2 ? '#1a3' : this.state.powerSaver === 1 ? '#ff9800' : '#a13'}} >{Local.PowerSaver[this.state.powerSaver]}</Text>
+                                        </Label>
+                                        <Slider style={{ margin: 6, marginTop: 19 }} alignSelf={'stretch'} maximumValue={2} minimumValue={0} step={1} value={this.state.powerSaver} onValueChange={v => { this.setState({ powerSaver: v }); this.local.powerSaver = v; console.log("Powersaver: " + Local.PowerSaver[v], v); this._saveOptions(); }} />
                                     </Item>
                                 </ScrollView>
                                 <Button style={styles.footerButton} icon block rounded danger onPress={buton => { this.setState({ showOptions: false }) }} >

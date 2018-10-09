@@ -5,7 +5,7 @@ import { Root, Toast, ActionSheet } from 'native-base';
 import Expo, { MapView } from 'expo';
 import Omnibar from './components/Omnibar';
 import Local, { Vehicle } from './src/Local'
-import Route, { Location } from './src/Route';
+import { Location } from './src/Route';
 
 export default class Home extends Component {
 
