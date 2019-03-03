@@ -1,18 +1,10 @@
 import { AsyncStorage, ToastAndroid, Platform } from 'react-native';
 import { Toast } from 'native-base';
-import * as fBase from 'firebase';
-
+import { FIREBASE } from "../App";
 import { Location } from "./Route";
 
-export const DEBUG = true;
+export const DEBUG = process.env.NODE_ENV == 'development';
 
-const FIREBASE = fBase.initializeApp({
-    apiKey: "AIzaSyDz3BuwyGYx8XtH5L4BVC4jFgId1Rn11yQ",
-    authDomain: "local-00000.firebaseapp.com",
-    databaseURL: "https://local-00000.firebaseio.com",
-    storageBucket: "local-00000.appspot.com",
-    messagingSenderId: "1042041164043"
-});
 /**
  * 
  *  Values stored in the database include: web,user.
@@ -100,20 +92,19 @@ export default class Local {
 
         try {
             let response = await this.fetch(url, data, method, timeout, authenticated);
-            console.log(response);
             if (!response) {
                 throw new Error('Network request failed');
             }
+            let result = await response.json()
 
             if (!response.ok && response.status > 299) {
-                throw new Error("Error performing your request!");
+                throw new Error(result.error ? result.error.join('. ') : "Error performing your request!");
             }
             if (response.headers.has('X-Auth')) {
                 this.AUTH_TOKEN = response.headers.get('X-Auth').trim();
             }
-
-            let result = await response.json()
-            console.log(result);
+            console.log(result)
+            // let result = await response.json()
             if (!result) {
                 return callback();
             }
@@ -136,7 +127,13 @@ export default class Local {
     }
 
     fetch(url, data, method, timeout, authenticated = false) {
+        console.log(arguments)
         return new Promise((res, rej) => {
+            let headers = new Headers({
+                'Content-Type': 'application/json'
+            })
+            if (authenticated) headers.append('X-Auth', this.AUTH_TOKEN)
+
             fetch(url, {
                 body: data && method !== "get" ? data : null,
                 keepalive: true,
@@ -145,7 +142,7 @@ export default class Local {
                 redirect: "follow",
                 method: method || "get",
                 // signal: signal,
-                headers: authenticated ? ['X-Auth']['Bearer '.concat(this.AUTH_TOKEN)] : null
+                headers
             }).then(res).catch(rej);
             if (timeout !== undefined && typeof timeout === 'number') {
                 setTimeout((rej), timeout, new Error('Connection timed out!'));
@@ -157,10 +154,8 @@ export default class Local {
 
     }
 
-    parseFirebaseUser(res) {
-        let user = new User(res.email.split('@')[0]);
-        user.id = res.uid;
-        return user;
+    parseFirebaseUser(res, extra = {}) {
+        return new User({ username: res.email.split('@')[0], id: res.id, ...extra });
     }
 
     getUser(id) {
@@ -182,16 +177,13 @@ export default class Local {
                 return this.fBase.auth().createUserWithEmailAndPassword(user.username + "@local-00000.firebaseapp.com", user.password)
                     .then(auth => {
                         if (auth.user) {
-                            if (!DEBUG && this.isLagacy) {
-                                this.getWebSocketUrl();
-                            }
-                            return callback(this.parseFirebaseUser(auth.user));
+                            return callback(this.parseFirebaseUser(auth.user, { isNewUser: true }));
                         }
                         return callback(null, new Error("Server not responding"));
                     }).catch(rej);
             });
         } else {
-            return this.buildRequest("post", "/user/add", JSON.stringify(user), (data, err) => {
+            return this.buildRequest("post", "/user/register", JSON.stringify(user), (data, err) => {
                 if (err) {
                     throw err;
                 }
@@ -253,6 +245,29 @@ export default class Local {
         }
     }
 
+    addVehicle(username, vehicle, callback) {
+        return this.buildRequest('post', '/vehicle/' + username, JSON.stringify({ ...vehicle, user: username }), (res, err) => {
+            if (err) {
+                return callback(null, err);
+            }
+            callback(res, err);
+        }, 15000, true).catch((err) => {
+            callback(null, err)
+        });
+
+    }
+
+    deleteVehicle(username, vehicle, callback) {
+        return this.buildRequest('delete', '/vehicle/' + username + '/' + vehicle, null, (res, err) => {
+            if (err) {
+                return callback(null, err);
+            }
+            callback(res, err);
+        }, 15000, true).catch((err) => {
+            callback(null, err)
+        });
+
+    }
     getVehicles(callback) {
         return this.buildRequest('get', '/vehicle', undefined, (res, err) => {
             if (err) {
@@ -268,6 +283,7 @@ export default class Local {
                     car.vid = val.vid;
                     car.year = val.year;
                     car.profile = val.profile;
+                    car.user = val.user
                     return car;
                 })
             }
@@ -324,7 +340,7 @@ export default class Local {
     }
 
     setVehicleLocation(vehicle, location, callback) {
-        return this.buildRequest('post', '/location/' + vehicle.vid, JSON.stringify({ vehicle: vehicle.vid, longitude: location.longitude, latitude: location.latitude }), (res, err) => {
+        return this.buildRequest('patch', '/vehicle/location/' + vehicle.vid, JSON.stringify({ vehicle: vehicle.vid, longitude: location.longitude, latitude: location.latitude }), (res, err) => {
             if (err) {
                 return err;
             }
@@ -334,10 +350,10 @@ export default class Local {
 
     logout(callback) {
         if (this.isLagacy) {
-            return this.buildRequest('get', '/user/logout', null, res => {
-                this.AUTH_TOKEN = null;
-                return callback();
-            });
+            // return this.buildRequest('get', '/user/logout', null, res => {
+            this.AUTH_TOKEN = null;
+            return callback();
+            // });
         } else {
             return this.fBase.auth().signOut().then(callback);
         }
@@ -379,7 +395,8 @@ export default class Local {
         };
     }
 
-    static toast(message, options = { type: 'info', duration: ToastAndroid.SHORT, position: 'center' }) {
+    static toast(message, options = {}) {
+        option = { type: 'info', duration: ToastAndroid.SHORT, position: 'center', ...options }
         if (Platform.OS === "android") {
             let position;
             switch (options.position || 'center') {
@@ -393,6 +410,7 @@ export default class Local {
                     position = ToastAndroid.TOP;
                     break;
             }
+
             ToastAndroid.showWithGravity(message, options.duration || ToastAndroid.SHORT, position);
         } else {
             Toast.show({ text: message, type: options.type || 'info', position: options.position || 'center' });
@@ -440,6 +458,7 @@ export class User {
     vehicles = []
     profile = null
     token = null;
+    isNewUser = false;
     get profileSrc() {
         return "data:image/png;base64," + this.profile;
     }

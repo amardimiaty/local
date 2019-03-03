@@ -1,9 +1,9 @@
-import React, { Component } from 'react';
-import { View, Text, Icon, Button, Input, Toast, Root, Item, CheckBox, Switch, Label } from 'native-base';
-import { Slider,KeyboardAvoidingView, StatusBar, AsyncStorage, Alert, ToastAndroid, Modal, ScrollView, StyleSheet, BackPressEventName, ActivityIndicator, Vibration, BackHandler, Platform } from 'react-native';
 import Expo, { Fingerprint } from 'expo';
-import Local, { User, debounce } from './src/Local';
+import { Button, Icon, Input, Item, Label, Root, Switch, Text, Toast, View } from 'native-base';
+import React, { Component } from 'react';
+import { ActivityIndicator, BackPressEventName as backevent, Alert, AsyncStorage, BackHandler, Modal, Platform, ScrollView, Slider, StatusBar, StyleSheet, ToastAndroid, Vibration } from 'react-native';
 import { version } from './App';
+import Local, { debounce, User } from './src/Local';
 
 export default class Splash extends Component {
 
@@ -86,7 +86,7 @@ export default class Splash extends Component {
                 // }, 6000)
 
             } else {
-                
+
                 if (this.local.isSetup && this.user.token) {
                     this.local.loginWithToken({ token: this.user.token }, (newToken, err) => {
                         this.setState({ settingsLoaded: false });
@@ -106,9 +106,9 @@ export default class Splash extends Component {
                         });
                     })
                 } else {
-                        this.setState({ settingsLoaded: true });
-                }                
-                
+                    this.setState({ settingsLoaded: true });
+                }
+
                 console.log(this.state.username, this.user)
                 this.setState({ settingsLoaded: true });
             }
@@ -122,17 +122,19 @@ export default class Splash extends Component {
             })
         }, 1000).bind(this);
 
-        BackHandler.addEventListener(BackPressEventName, () => {
+        this.backevent = () => {
             console.log("back button pressed");
-            if(this.state.getFingerPrint){
+            if (this.state.getFingerPrint) {
                 Fingerprint.cancelAuthenticate();
-                this.setState({getFingerPrint: false});
+                this.setState({ getFingerPrint: false });
                 return true;
-            }else if (this.state.showLogin) {
+            } else if (this.state.showLogin) {
                 this.resetModal()
                 return true;
-            } 
-        });
+            }
+        };
+
+        BackHandler.addEventListener(backevent, this.backevent);
     }
 
     componentDidMount() {
@@ -153,6 +155,8 @@ export default class Splash extends Component {
 
     componentWillUnmount() {
         this.resetModal();
+        BackHandler.removeEventListener(backevent, this.backevent);
+
         this.running = false;
         clearTimeout(this.timeoutID);
     }
@@ -301,7 +305,7 @@ export default class Splash extends Component {
                     : null}
                 <Item underline={false} style={{ borderBottomWidth: 0, margin: 6, justifyContent: 'center', alignContent: 'stretch' }}  >
                     <Label>Use WebSockets?</Label>
-                    <Switch value={this.state.useWebsockets} onValueChange={(t) => { this.setState({ useWebsockets: t }); if (t === this.local.useWebSock) { return; } this.local.useWebSock = t; console.log(t, this.local); this._saveOptions(); }} />
+                    <Switch disabled value={this.state.useWebsockets} onValueChange={(t) => { this.setState({ useWebsockets: t }); if (t === this.local.useWebSock) { return; } this.local.useWebSock = t; console.log(t, this.local); this._saveOptions(); }} />
                 </Item>
             </View>
         )
@@ -335,7 +339,7 @@ export default class Splash extends Component {
                         :
                         <ActivityIndicator size={'large'} marginTop={10} color={this.state.loggedIn ? '#5f5' : '#fffb'} />
                     }
-                    <Text style={{ textAlign: 'center', color: '#aaa', fontSize: 13, position: 'absolute', bottom: 20, left: 0, right: 0 }} >&copy; 2018 Agwa Israel Onome</Text>
+                    <Text style={{ textAlign: 'center', color: '#aaa', fontSize: 13, position: 'absolute', bottom: 20, left: 0, right: 0 }} >&copy; {new Date().getFullYear()} Agwa Israel Onome</Text>
 
                     {/* {this.state.showLogin ? */}
                     <Modal visible={this.state.showLogin} onRequestClose={() => { }} transparent={true} animationType={'slide'} >
@@ -412,7 +416,7 @@ export default class Splash extends Component {
                                 <ScrollView>
                                     <Item underline={false} style={{ borderBottomWidth: 0, margin: 6, justifyContent: 'center', alignContent: 'stretch' }}  >
                                         <Label>Use Legacy?</Label>
-                                        <Switch value={this.state.useLegacy} onValueChange={(t) => { this.setState({ useLegacy: t }); if (t === this.local.useLegacy) { return; } this.local.config.USE_LEGACY = t; console.log('use legacy', t, this.local); this._saveOptions(); }} />
+                                        <Switch disabled value={this.state.useLegacy} onValueChange={(t) => { this.setState({ useLegacy: t }); if (t === this.local.useLegacy) { return; } this.local.config.USE_LEGACY = t; console.log('use legacy', t, this.local); this._saveOptions(); }} />
                                     </Item>
                                     {this.state.useLegacy ? this.getLegacyAuth() : null}
                                     {this.state.hasFingerprint ?
@@ -424,7 +428,7 @@ export default class Splash extends Component {
                                     <Item stackedLabel underline={false} style={{ borderBottomWidth: 0, margin: 7, justifyContent: 'center', alignContent: 'stretch' }}  >
                                         <Label >
                                             <Icon name={'battery-full'} style={{ fontSize: 15 }} /> &nbsp;PowerSaver: &nbsp;
-                                        <Text style={{ fontWeight: "bold",color: this.state.powerSaver === 2 ? '#1a3' : this.state.powerSaver === 1 ? '#ff9800' : '#a13'}} >{Local.PowerSaver[this.state.powerSaver]}</Text>
+                                        <Text style={{ fontWeight: "bold", color: this.state.powerSaver === 2 ? '#1a3' : this.state.powerSaver === 1 ? '#ff9800' : '#a13' }} >{Local.PowerSaver[this.state.powerSaver]}</Text>
                                         </Label>
                                         <Slider style={{ margin: 6, marginTop: 19 }} alignSelf={'stretch'} maximumValue={2} minimumValue={0} step={1} value={this.state.powerSaver} onValueChange={v => { this.setState({ powerSaver: v }); this.local.powerSaver = v; console.log("Powersaver: " + Local.PowerSaver[v], v); this._saveOptions(); }} />
                                     </Item>

@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, AsyncStorage, ToastAndroid, Platform, StatusBar
 import { Circle, Marker, UrlTile, LocalTile } from 'react-native-maps';
 import { Root, Toast, ActionSheet } from 'native-base';
 import Expo, { MapView } from 'expo';
-import Omnibar from './components/Omnibar';
+import Omnibar, { AddCarDialog, ListCarDialog } from './components/Omnibar';
 import Local, { Vehicle } from './src/Local'
 import { Location } from './src/Route';
 
@@ -33,15 +33,18 @@ export default class Home extends Component {
         console.log(55559, local);
 
         let user = this.props.navigation.state.params.user;
+        if (user.isNew) {
+            Local.toast("Welcome to Local!");
+        }
 
-        this.initialRegion = {
-            latitude: 6.455027,
-            longitude: 3.284082, latitudeDelta: 0.0922, longitudeDelta: 0.0922 * (width / height)
-        };
         this.state = {
-            local: local, region: this.initialRegion,
+            local: local, region: {
+                latitude: 6.455027,
+                longitude: 3.284082, latitudeDelta: 0.0922, longitudeDelta: 0.0922 * (width / height)
+            },
             record: false, followUser: true,
-            userLocation: new Location(), vehicles: []
+            userLocation: new Location(), vehicles: [],
+            carDialog: false, listDialog: false
         }
         this.barRef = null;
 
@@ -56,7 +59,7 @@ export default class Home extends Component {
 
         navigator.geolocation.getCurrentPosition((loc) => {
             console.log(50505150505, loc);
-            let location = this.state.userLocation;
+            let location = Object.assign(this.state.userLocation);
             location.latitude = loc.coords.latitude;
             location.longitude = loc.coords.longitude;
             location.timestamp = loc.timestamp
@@ -80,8 +83,14 @@ export default class Home extends Component {
                     }) : null}
                 </MapView>
                 {/* <View style={styles.widgets} > */}
-                <Omnibar style={styles.widgets} setCoordinate={this._setCoordinate.bind(this)} ref={(ref) => { this.barRef = ref }} logout={this.props.navigation.replace.bind(this)} user={this.props.navigation.state.params.user} local={this.state.local} cars={this.state.vehicles} />
+                <Omnibar listVehicles={() => this.setState({ listDialog: true })} addVehicle={() => { this.setState({ carDialog: true }) }} style={styles.widgets} setCoordinate={this._setCoordinate.bind(this)} ref={(ref) => { this.barRef = ref }} logout={this.props.navigation.replace.bind(this)} user={this.props.navigation.state.params.user} local={this.state.local} cars={this.state.vehicles} ownCars />
                 {/* </View> */}
+                {this.state.carDialog ?
+                    (<AddCarDialog local={this.state.local} user={this.props.navigation.state.params.user} successCallback={() => { this.getVehicles() }} showModal={this.state.carDialog} closeDialog={() => this.setState({ carDialog: false })} />)
+                    : null}
+                {this.state.listDialog ?
+                    (<ListCarDialog local={this.state.local} vehicles={this.state.vehicles} user={this.props.navigation.state.params.user} successCallback={() => { this.getVehicles() }} showModal={this.state.listDialog} closeDialog={() => this.setState({ listDialog: false })} />)
+                    : null}
             </Root>
         );
     }
@@ -144,7 +153,7 @@ export default class Home extends Component {
 
 
 
-const margin = 15;
+const margin = 18;
 
 const styles = StyleSheet.create({
     container: {
@@ -165,11 +174,10 @@ const styles = StyleSheet.create({
         // height: 50,
         backgroundColor: "#0000",
         margin: margin,
-        marginTop: StatusBar.currentHeight + margin,
         padding: 0,
         borderRadius: 10,
         position: 'absolute',
-        top: 0,
+        top: (StatusBar.currentHeight + margin),
         bottom: 0,
         left: 0,
         right: 0,
